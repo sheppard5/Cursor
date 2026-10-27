@@ -64,6 +64,23 @@ npm run optimize -- --dry-run
 npm run optimize -- --with-memory-limit --with-screen-timeout
 ```
 
+## Реклама / шпигунські додатки
+
+Спочатку dry-run, потім застосування (Settings, GMS, launcher не чіпає):
+
+```bash
+npm run optimize -- --detox-dry-run --host 192.168.1.83 --port 44853
+npm run optimize -- --detox --host 192.168.1.83 --port 44853
+```
+
+На Windows без Node — скрипт у `scripts/detox-tablet.ps1` (запускати з папки `platform-tools`):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File C:\path\to\Cursor\scripts\detox-tablet.ps1 -Serial 192.168.1.83:44853 -DryRun
+powershell -ExecutionPolicy Bypass -File C:\path\to\Cursor\scripts\detox-tablet.ps1 -Serial 192.168.1.83:44853
+.\adb -s 192.168.1.83:44853 reboot
+```
+
 ## Перевірка
 
 ```bash

@@ -4,6 +4,7 @@ import { buildOptimizePlan, buildRestorePlan, renderScript } from "./lib/plan";
 import {
   applyOptimize,
   connectDevice,
+  detoxDevice,
   pairDevice,
   pollQrPairing,
   readDevice,
@@ -77,17 +78,21 @@ async function main() {
   npm run optimize -- --dry-run
   npm run optimize -- --pair-port 37123 --code 123456 --port 41555
   npm run optimize -- --restore
+  npm run optimize -- --detox --host 192.168.1.83 --port 44853
+  npm run optimize -- --detox-dry-run --host 192.168.1.83 --port 44853
 
 За замовчуванням: коротші анімації, менше сканування, адаптивна батарея,
 очищення кешу, черга ART і fstrim. Програми й файли не видаляються.
 
 --qr показує QR як у Android Studio: на планшеті відкрийте
 «Сполучити пристрій через QR-код» і наведіть камеру на термінал.
+
+--detox вимикає/знімає відомі рекламні й шпигунські пакети (Settings/GMS не чіпає).
 `);
     return;
   }
 
-  if (has("--dry-run")) {
+  if (has("--dry-run") && !has("--detox") && !has("--detox-dry-run")) {
     const plan = has("--restore") ? buildRestorePlan(flag("--screen-timeout")) : buildOptimizePlan(options);
     console.log(renderScript(plan));
     return;
@@ -112,6 +117,23 @@ async function main() {
     printSteps(result.results);
     if (result.device) console.log(`\n${formatReport(result.device)}`);
     if (!result.results.every((step) => step.ok)) process.exitCode = 1;
+    return;
+  }
+
+  if (has("--detox") || has("--detox-dry-run")) {
+    const result = await detoxDevice(host, port, has("--detox-dry-run") || has("--dry-run"));
+    if (result.targets.length === 0) {
+      console.log("Кандидатів реклами/шпигунства з відомого списку не знайдено.");
+      return;
+    }
+    for (const target of result.targets) {
+      console.log(`${target.action}\t${target.packageName}\t${target.reason}`);
+    }
+    if (result.dryRun) {
+      console.log("\nDry-run: нічого не змінено. Запустіть без --detox-dry-run, щоб застосувати.");
+      return;
+    }
+    console.log("\nГотово. Перезавантажте планшет: adb reboot");
     return;
   }
 

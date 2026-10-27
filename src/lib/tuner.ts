@@ -1,5 +1,6 @@
 import QRCode from "qrcode";
 import { adbVersion, interpretConnect, runAdb } from "./adb";
+import { parsePackageList, planDetox, renderDetoxShell, type DetoxTarget } from "./detox";
 import { assertPairCode, parseEndpoint, sanitizeTimeout } from "./endpoint";
 import { TunerError } from "./errors";
 import { AUDIT_SCRIPT, parseAudit } from "./parse";
@@ -201,3 +202,20 @@ export async function health() {
   const version = await adbVersion();
   return { ok: true as const, adb: true, version };
 }
+
+export async function detoxDevice(host: string, port: number, dryRun = false) {
+  const connection = await connectDevice(host, port);
+  if (connection.status !== "connected") {
+    throw new TunerError(connection.message, 409);
+  }
+  const allRaw = await shell(connection.serial, "pm list packages", 30_000);
+  const userRaw = await shell(connection.serial, "pm list packages -3", 30_000);
+  const targets = planDetox(parsePackageList(allRaw), parsePackageList(userRaw));
+  if (dryRun || targets.length === 0) {
+    return { ok: true as const, dryRun: true as const, targets, raw: "" };
+  }
+  const raw = await shell(connection.serial, renderDetoxShell(targets), 120_000);
+  return { ok: true as const, dryRun: false as const, targets, raw };
+}
+
+export type { DetoxTarget };
