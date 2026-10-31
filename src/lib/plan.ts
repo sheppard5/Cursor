@@ -252,10 +252,10 @@ echo doze=$(dumpsys deviceidle enabled 2>/dev/null | tr -d '[:space:]')
     id: "trim",
     title: "Очистити кеш",
     shell: `
-pm trim-caches 34359738368 2>&1
+pm trim-caches 1099511627776000 2>&1
 trim_status=$?
 if [ "$trim_status" -ne 0 ]; then
-  cmd package trim-caches 34359738368 2>&1
+  cmd package trim-caches 1099511627776000 2>&1
   trim_status=$?
 fi
 echo trim_exit=$trim_status
