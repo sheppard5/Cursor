@@ -39,7 +39,7 @@ export function parseEndpoint(host: string, port: number): Endpoint {
 export function assertPairCode(code: string): string {
   const normalized = code.trim();
   if (!/^\d{6}$/.test(normalized)) {
-    throw new TunerError("Код сполучення — це 6 цифр з екрана планшета.", 400);
+    throw new TunerError("Код сполучення — це 6 цифр з екрана телефону.", 400);
   }
   return normalized;
 }
@@ -49,4 +49,15 @@ export function sanitizeTimeout(value: unknown): string | undefined {
   if (!Number.isInteger(numeric)) return undefined;
   if (numeric < 15_000 || numeric > 30 * 60 * 1000) return undefined;
   return String(numeric);
+}
+
+/** Accepts a refresh rate the 14T Pro panel can store. Rejects shell metacharacters. */
+export function sanitizeRefresh(value: unknown): { ok: true; value?: string } | { ok: false } {
+  if (value == null) return { ok: true, value: undefined };
+  const text = String(value).trim();
+  if (text === "" || text === "null") return { ok: true, value: undefined };
+  if (!/^\d{1,3}(?:\.\d{1,2})?$/.test(text)) return { ok: false };
+  const numeric = Number(text);
+  if (!Number.isFinite(numeric) || numeric < 1 || numeric > 165) return { ok: false };
+  return { ok: true, value: String(numeric) };
 }

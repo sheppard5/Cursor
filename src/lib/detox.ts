@@ -1,4 +1,6 @@
-/** Packages we never disable or uninstall — tablet must keep booting and stay usable. */
+import { XIAOMI_KEEP } from "./xiaomi";
+
+/** Packages we never disable or uninstall — the phone must keep booting and stay usable. */
 export const NEVER_TOUCH = [
   "android",
   "com.android.systemui",
@@ -33,6 +35,7 @@ export const NEVER_TOUCH = [
   "com.android.mtp",
   "com.android.vpndialogs",
   "com.android.wallpaper",
+  ...XIAOMI_KEEP,
 ] as const;
 
 /**
@@ -44,8 +47,6 @@ export const ADWARE_SPYWARE = [
   "com.facebook.appmanager",
   "com.facebook.system",
   "com.facebook.services",
-  "com.facebook.katana",
-  "com.instagram.android",
   // Generic adware / cleaners / boosters
   "com.cleanmaster.mguard",
   "com.cleanmaster.security",
@@ -60,7 +61,6 @@ export const ADWARE_SPYWARE = [
   // Chinese analytics / push / stores that push junk
   "com.miui.analytics",
   "com.miui.systemAdSolution",
-  "com.miui.daemon",
   "com.xiaomi.discover",
   "com.xiaomi.mipicks",
   "com.xiaomi.glgm",
@@ -85,7 +85,6 @@ export const ADWARE_SPYWARE = [
   // OEM promo / partner auto-install
   "android.autoinstalls.config.external",
   "com.android.companion",
-  "com.google.android.setupwizard",
   // Common spyware-ish remote / stalkerware package names (only if present)
   "com.mspy.android",
   "com.flexispy.android",

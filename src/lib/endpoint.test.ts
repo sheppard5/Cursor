@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { assertPairCode, isPrivateIpv4, parseEndpoint, sanitizeTimeout } from "./endpoint";
+import { assertPairCode, isPrivateIpv4, parseEndpoint, sanitizeRefresh, sanitizeTimeout } from "./endpoint";
 import { TunerError } from "./errors";
 
 test("accepts the tablet address", () => {
@@ -28,6 +28,15 @@ test("pair code is six digits", () => {
   assert.throws(() => assertPairCode("12345"), TunerError);
   assert.throws(() => assertPairCode("1234567"), TunerError);
   assert.throws(() => assertPairCode("12ab56"), TunerError);
+});
+
+test("refresh rate is a plain hertz value", () => {
+  assert.deepEqual(sanitizeRefresh("144"), { ok: true, value: "144" });
+  assert.deepEqual(sanitizeRefresh("60.0"), { ok: true, value: "60" });
+  assert.deepEqual(sanitizeRefresh("null"), { ok: true, value: undefined });
+  assert.deepEqual(sanitizeRefresh("144; reboot"), { ok: false });
+  assert.deepEqual(sanitizeRefresh("0"), { ok: false });
+  assert.deepEqual(sanitizeRefresh("240"), { ok: false });
 });
 
 test("screen timeout is a safe millisecond value", () => {

@@ -11,6 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { QrPairDialog, type QrPairResult } from "@/components/qr-pair-dialog";
 import { adviceFor, batteryPhrase, deviceTitle, formatKb, formatTemp, formatUptime, usedPercent } from "@/lib/format";
+import { isXiaomi14tPro, refreshPhrase } from "@/lib/xiaomi";
 import { OPTION_CATALOG } from "@/lib/plan";
 import { DEFAULT_HOST, DEFAULT_PORT, defaultOptions, type DeviceSnapshot, type OptimizeOptions, type StepResult } from "@/lib/types";
 
@@ -58,7 +59,10 @@ export function Optimizer() {
   const [health, setHealth] = useState<Health | null>(null);
   const [ready, setReady] = useState(false);
   const originalTimeout = useRef<string | null>(null);
+  const originalPeak = useRef<string | null>(null);
+  const originalMin = useRef<string | null>(null);
   const nudgedBattery = useRef(false);
+  const announcedPhone = useRef(false);
 
   useEffect(() => {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -102,14 +106,23 @@ export function Optimizer() {
     );
   }, [ready, host, port, options]);
 
-  function remember(next: DeviceSnapshot) {
+  function remember(next: DeviceSnapshot, announce = false) {
     setDevice(next);
     if (originalTimeout.current == null && /^\d+$/.test(next.screenOffTimeoutMs)) {
       originalTimeout.current = next.screenOffTimeoutMs;
     }
+    if (originalPeak.current == null) {
+      originalPeak.current = next.peakRefresh || "null";
+      originalMin.current = next.minRefresh || "null";
+    }
     if (!nudgedBattery.current && next.batteryLevel != null && next.batteryLevel < 20 && !next.plugged) {
       nudgedBattery.current = true;
       setOptions((current) => ({ ...current, dexopt: false }));
+    }
+    if (announce && !announcedPhone.current && isXiaomi14tPro(next)) {
+      announcedPhone.current = true;
+      setOptions((current) => ({ ...current, memoryLimit: false }));
+      setNotice("Розпізнано Xiaomi 14T Pro. Профіль HyperOS: 144/60 Гц, сон, заморозка кешу й реклама Xiaomi. Ліміт фонових процесів лишається вимкненим.");
     }
   }
 
@@ -129,10 +142,10 @@ export function Optimizer() {
     setResults(null);
     try {
       const data = await postJson<{ device: DeviceSnapshot }>("/api/audit", payload());
-      remember(data.device);
+      remember(data.device, true);
     } catch (cause) {
       setDevice(null);
-      setError(cause instanceof Error ? cause.message : "Не вдалося зчитати планшет.");
+      setError(cause instanceof Error ? cause.message : "Не вдалося зчитати телефон.");
     } finally {
       setBusy(null);
     }
@@ -145,10 +158,10 @@ export function Optimizer() {
       return;
     }
     if (!/^\d{6}$/.test(pairCode.trim())) {
-      setError("Код сполучення — це 6 цифр з екрана планшета.");
+      setError("Код сполучення — це 6 цифр з екрана телефону.");
       return;
     }
-    setBusy("Сполучаю комп’ютер із планшетом…");
+    setBusy("Сполучаю комп’ютер із телефоном…");
     setError(null);
     setNotice(null);
     try {
@@ -180,9 +193,9 @@ export function Optimizer() {
             host: result.host,
             port: result.port,
           });
-          remember(data.device);
+          remember(data.device, true);
         } catch (cause) {
-          setError(cause instanceof Error ? cause.message : "Не вдалося зчитати планшет після QR.");
+          setError(cause instanceof Error ? cause.message : "Не вдалося зчитати телефон після QR.");
         } finally {
           setBusy(null);
         }
@@ -210,7 +223,7 @@ export function Optimizer() {
       );
       setResults(data.results);
       if (data.device) remember(data.device);
-      setNotice(data.ok ? "Профіль застосовано." : "Частину кроків планшет не прийняв. Деталі нижче.");
+      setNotice(data.ok ? "Профіль застосовано." : "Частину кроків телефон не прийняв. Деталі нижче.");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Оптимізація не вдалася.");
     } finally {
@@ -230,7 +243,13 @@ export function Optimizer() {
     try {
       const data = await postJson<{ ok: boolean; results: StepResult[]; device: DeviceSnapshot | null }>(
         "/api/restore",
-        { ...payload(), screenOffTimeoutMs: originalTimeout.current },
+        {
+          ...payload(),
+          screenOffTimeoutMs: originalTimeout.current,
+          restoreRefresh: originalPeak.current != null,
+          peakRefresh: originalPeak.current,
+          minRefresh: originalMin.current,
+        },
       );
       setResults(data.results);
       if (data.device) setDevice(data.device);
@@ -243,7 +262,9 @@ export function Optimizer() {
   }
 
   const selected = OPTION_CATALOG.filter((item) => options[item.key]).length;
-  const title = device ? deviceTitle(device.manufacturer, device.model) : host.trim() || DEFAULT_HOST;
+  const title = device
+    ? deviceTitle(device.manufacturer, device.model, device.marketName)
+    : "Xiaomi 14T Pro";
 
   return (
     <div className="relative min-h-dvh">
@@ -254,13 +275,13 @@ export function Optimizer() {
       <main className="relative mx-auto flex w-full max-w-5xl flex-col gap-8 px-4 py-8 md:px-8 md:py-12">
         <header className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
           <div className="max-w-2xl">
-            <p className="font-mono text-[0.72rem] tracking-[0.22em] text-primary uppercase">Планшет · ADB</p>
+            <p className="font-mono text-[0.72rem] tracking-[0.22em] text-primary uppercase">HyperOS · ADB</p>
             <h1 className="font-heading mt-3 break-words text-4xl leading-[0.95] font-medium tracking-tight md:text-6xl">
               {title}
             </h1>
             <p className="mt-4 max-w-xl text-base leading-relaxed text-muted-foreground">
-              Безпечний профіль для Android по Wi-Fi. Коротші анімації, менше фонового радіо, очищення кешу.
-              Програми, фото й облікові записи залишаються на місці.
+              Профіль для Xiaomi 14T Pro по Wi-Fi: 144 Гц з підлогою 60, коротші анімації, сон, заморозка кешу
+              і вимкнення реклами HyperOS. Камера, дзвінки, фото й облікові записи залишаються на місці.
             </p>
           </div>
           <Badge variant="outline" className="h-7 px-3 font-mono text-[0.7rem] tracking-wide">
@@ -379,27 +400,27 @@ export function Optimizer() {
             ) : (
               <Card>
                 <CardHeader>
-                  <CardTitle>Як відкрити планшет</CardTitle>
-                  <CardDescription>
-                    Ця сторінка керує планшетом лише з комп’ютера в тій самій мережі. З хмари до 192.168.1.83 маршруту немає.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <ol className="flex flex-col gap-4 text-sm leading-relaxed">
-                    <li className="flex gap-3">
-                      <span className="font-mono text-primary">01</span>
-                      <span>На планшеті: Налаштування → Про планшет → сім натискань на «Номер збірки», доки не з’явиться режим розробника.</span>
-                    </li>
-                    <li className="flex gap-3">
-                      <span className="font-mono text-primary">02</span>
-                      <span>У «Для розробників» увімкніть «Бездротове налагодження». Планшет і комп’ютер мають бути в одному Wi-Fi.</span>
-                    </li>
-                    <li className="flex gap-3">
-                      <span className="font-mono text-primary">03</span>
-                      <span>
-                        Найпростіше: натисніть «Сполучити через QR», на планшеті відкрийте «Сполучити пристрій через QR-код» і наведіть камеру на код зі сторінки.
-                      </span>
-                    </li>
+                <CardTitle>Як відкрити телефон</CardTitle>
+                <CardDescription>
+                  Сторінка керує Xiaomi 14T Pro лише з комп’ютера в тій самій мережі. З хмари до домашнього Wi-Fi маршруту немає.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ol className="flex flex-col gap-4 text-sm leading-relaxed">
+                  <li className="flex gap-3">
+                    <span className="font-mono text-primary">01</span>
+                    <span>На телефоні: Налаштування → Про телефон → сім натискань на «Версія HyperOS». Якщо пункту немає — на «Номер збірки».</span>
+                  </li>
+                  <li className="flex gap-3">
+                    <span className="font-mono text-primary">02</span>
+                    <span>Додаткові налаштування → Для розробників → увімкніть «Бездротове налагодження». Телефон і комп’ютер мають бути в одному Wi-Fi, екран не гасіть.</span>
+                  </li>
+                  <li className="flex gap-3">
+                    <span className="font-mono text-primary">03</span>
+                    <span>
+                      Найпростіше: натисніть «Сполучити через QR», на телефоні відкрийте «Сполучити пристрій через QR-код» і наведіть камеру на код зі сторінки.
+                    </span>
+                  </li>
                     <li className="flex gap-3">
                       <span className="font-mono text-primary">04</span>
                       <span>
@@ -418,13 +439,16 @@ export function Optimizer() {
               <CardHeader>
                 <CardTitle>Профіль</CardTitle>
                 <CardDescription>
-                  {selected} {selected === 1 ? "крок" : selected >= 2 && selected <= 4 ? "кроки" : "кроків"}. Нічого не видаляється і планшет не скидається.
+                  {selected} {selected === 1 ? "крок" : selected >= 2 && selected <= 4 ? "кроки" : "кроків"}. Нічого не видаляється і телефон не скидається.
                 </CardDescription>
               </CardHeader>
               <CardContent className="flex flex-col gap-4">
                 {OPTION_CATALOG.map((item, index) => (
                   <div key={item.key}>
                     {index > 0 ? <Separator className="mb-4" /> : null}
+                    {item.group && OPTION_CATALOG[index - 1]?.group !== item.group ? (
+                      <p className="mb-3 font-mono text-[0.72rem] tracking-[0.18em] text-primary uppercase">{item.group}</p>
+                    ) : null}
                     <div className="flex items-start justify-between gap-4">
                       <div className="min-w-0">
                         <Label htmlFor={item.key}>{item.title}</Label>
@@ -541,9 +565,16 @@ function DevicePanel({ device }: { device: DeviceSnapshot }) {
         <Card size="sm">
           <CardContent className="flex flex-col gap-1">
             <span className="text-muted-foreground">Система</span>
-            <p className="font-heading text-2xl">Android {device.android || "—"}</p>
+            <p className="font-heading text-2xl">{device.osName || `Android ${device.android || "—"}`}</p>
             <p className="text-muted-foreground">
-              SDK {device.sdk || "—"} · анімації {scaleLabel(device.animations.window)} · {device.userPackages} програм
+              Android {device.android || "—"}
+              {device.osBuild ? ` · ${device.osBuild}` : ` · SDK ${device.sdk || "—"}`}
+              {" · "}анімації {scaleLabel(device.animations.window)}
+              {refreshPhrase(device.peakRefresh, device.minRefresh)
+                ? ` · екран ${refreshPhrase(device.peakRefresh, device.minRefresh)}`
+                : ""}
+              {" · "}
+              {device.userPackages} програм
             </p>
           </CardContent>
         </Card>

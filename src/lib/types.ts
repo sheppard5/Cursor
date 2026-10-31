@@ -5,6 +5,10 @@ export type OptimizeOptions = {
   animations: boolean;
   scans: boolean;
   adaptiveBattery: boolean;
+  refresh: boolean;
+  appFreezer: boolean;
+  doze: boolean;
+  hyperAds: boolean;
   trimCaches: boolean;
   dexopt: boolean;
   fstrim: boolean;
@@ -16,6 +20,10 @@ export const defaultOptions: OptimizeOptions = {
   animations: true,
   scans: true,
   adaptiveBattery: true,
+  refresh: true,
+  appFreezer: true,
+  doze: true,
+  hyperAds: true,
   trimCaches: true,
   dexopt: true,
   fstrim: true,
@@ -40,6 +48,11 @@ export type DeviceSnapshot = {
   sdk: string;
   build: string;
   abi: string;
+  marketName: string;
+  osName: string;
+  osBuild: string;
+  peakRefresh: string;
+  minRefresh: string;
   memTotalKb: number;
   memAvailableKb: number;
   swapTotalKb: number;

@@ -14,8 +14,8 @@ const unbounded = Unbounded({
 });
 
 export const metadata: Metadata = {
-  title: "Планшет 192.168.1.83",
-  description: "Безпечна оптимізація Android-планшета по Wi-Fi: анімації, батарея, кеш і сховище.",
+  title: "Xiaomi 14T Pro",
+  description: "Безпечна оптимізація Xiaomi 14T Pro по Wi-Fi: 144 Гц, батарея, реклама HyperOS, кеш і сховище.",
 };
 
 export default function RootLayout({

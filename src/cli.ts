@@ -1,6 +1,7 @@
 import QRCode from "qrcode";
 import { formatReport } from "./lib/format";
-import { buildOptimizePlan, buildRestorePlan, renderScript } from "./lib/plan";
+import { sanitizeRefresh } from "./lib/endpoint";
+import { buildOptimizePlan, buildRestorePlan, renderScript, type RefreshRestore } from "./lib/plan";
 import {
   applyOptimize,
   connectDevice,
@@ -24,6 +25,16 @@ function has(name: string): boolean {
   return process.argv.includes(name);
 }
 
+function refreshFromArgs(): RefreshRestore | undefined {
+  if (!has("--peak") && !has("--min")) return undefined;
+  const peak = sanitizeRefresh(flag("--peak"));
+  const min = sanitizeRefresh(flag("--min"));
+  if (!has("--peak") || !has("--min") || !peak.ok || !min.ok || peak.value == null || min.value == null) {
+    throw new Error("Для відновлення частоти передайте обидва прапорці, наприклад --peak 120 --min 60.");
+  }
+  return { peak: peak.value, min: min.value };
+}
+
 function printSteps(results: { ok: boolean; title: string; detail: string }[]) {
   for (const step of results) {
     console.log(`${step.ok ? "ок" : "ні"}  ${step.title} — ${step.detail}`);
@@ -36,7 +47,7 @@ async function pairWithQr() {
   console.log("");
   console.log(await QRCode.toString(started.payload, { type: "terminal", small: true }));
   console.log(`payload: ${started.payload}`);
-  console.log("На планшеті: Бездротове налагодження → Сполучити пристрій через QR-код.");
+  console.log("На телефоні: Бездротове налагодження → Сполучити пристрій через QR-код.");
   console.log("");
 
   try {
@@ -69,31 +80,43 @@ async function main() {
     memoryLimit: has("--with-memory-limit"),
     screenTimeout: has("--with-screen-timeout"),
   };
+  if (has("--no-xiaomi")) {
+    options.refresh = false;
+    options.appFreezer = false;
+    options.doze = false;
+    options.hyperAds = false;
+  }
 
   if (has("--help")) {
-    console.log(`Оптимізація Android-планшета через adb.
+    console.log(`Оптимізація Xiaomi 14T Pro через adb.
 
-  npm run optimize -- --host 192.168.1.83 --port 41555
+  npm run optimize -- --host 192.168.1.20 --port 41555
   npm run optimize -- --qr
   npm run optimize -- --dry-run
+  npm run optimize -- --no-xiaomi
   npm run optimize -- --pair-port 37123 --code 123456 --port 41555
-  npm run optimize -- --restore
-  npm run optimize -- --detox --host 192.168.1.83 --port 44853
-  npm run optimize -- --detox-dry-run --host 192.168.1.83 --port 44853
+  npm run optimize -- --restore --peak 120 --min 60
+  npm run optimize -- --detox --host 192.168.1.20 --port 44853
+  npm run optimize -- --detox-dry-run --host 192.168.1.20 --port 44853
 
-За замовчуванням: коротші анімації, менше сканування, адаптивна батарея,
-очищення кешу, черга ART і fstrim. Програми й файли не видаляються.
+За замовчуванням для 14T Pro: анімації 0,5×, менше сканування, адаптивна батарея,
+екран 144/60 Гц, заморозка кешу, Doze, вимкнення реклами HyperOS, очищення кешу,
+черга ART і fstrim. Камера, дзвінки, лаунчер і Joyose не чіпаються.
+Програми й файли не видаляються.
 
---qr показує QR як у Android Studio: на планшеті відкрийте
+--no-xiaomi прибирає кроки частоти, сну й реклами HyperOS.
+--qr показує QR як у Android Studio: на телефоні відкрийте
 «Сполучити пристрій через QR-код» і наведіть камеру на термінал.
 
---detox вимикає/знімає відомі рекламні й шпигунські пакети (Settings/GMS не чіпає).
+--detox вимикає/знімає відомі рекламні й шпигунські пакети (Settings, GMS, камеру не чіпає).
 `);
     return;
   }
 
   if (has("--dry-run") && !has("--detox") && !has("--detox-dry-run")) {
-    const plan = has("--restore") ? buildRestorePlan(flag("--screen-timeout")) : buildOptimizePlan(options);
+    const plan = has("--restore")
+      ? buildRestorePlan(flag("--screen-timeout"), refreshFromArgs())
+      : buildOptimizePlan(options);
     console.log(renderScript(plan));
     return;
   }
@@ -113,7 +136,7 @@ async function main() {
   }
 
   if (has("--restore")) {
-    const result = await restoreDevice(host, port, flag("--screen-timeout"));
+    const result = await restoreDevice(host, port, flag("--screen-timeout"), refreshFromArgs());
     printSteps(result.results);
     if (result.device) console.log(`\n${formatReport(result.device)}`);
     if (!result.results.every((step) => step.ok)) process.exitCode = 1;
@@ -133,7 +156,7 @@ async function main() {
       console.log("\nDry-run: нічого не змінено. Запустіть без --detox-dry-run, щоб застосувати.");
       return;
     }
-    console.log("\nГотово. Перезавантажте планшет: adb reboot");
+    console.log("\nГотово. Перезавантажте телефон: adb reboot");
     return;
   }
 

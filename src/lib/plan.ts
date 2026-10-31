@@ -1,5 +1,6 @@
 import { sanitizeTimeout } from "./endpoint";
 import type { OptimizeOptions, StepResult } from "./types";
+import { hyperPackageScript, refreshApplyScript, refreshRestoreScript } from "./xiaomi";
 
 export type PlannedStep = {
   id: string;
@@ -14,6 +15,7 @@ export const OPTION_CATALOG: {
   key: OptionKey;
   title: string;
   detail: string;
+  group?: string;
 }[] = [
   {
     key: "animations",
@@ -31,6 +33,32 @@ export const OPTION_CATALOG: {
     detail: "Система обмежує програми, якими давно не користувались, і вмикає режим очікування.",
   },
   {
+    key: "refresh",
+    title: "Екран 144 Гц",
+    detail:
+      "Пік 144 Гц і підлога 60 Гц — рідна матриця Xiaomi 14T Pro. Прокрутка лишається плавною, простій економить батарею.",
+    group: "Xiaomi 14T Pro",
+  },
+  {
+    key: "appFreezer",
+    title: "Заморожувати кеш програм",
+    detail: "Android тримає фонові програми замороженими, доки вони не потрібні. Менше фонової роботи.",
+    group: "Xiaomi 14T Pro",
+  },
+  {
+    key: "doze",
+    title: "Глибокий сон",
+    detail: "Увімкнути Doze, щоб телефон спав між перевірками мережі, коли екран вимкнений.",
+    group: "Xiaomi 14T Pro",
+  },
+  {
+    key: "hyperAds",
+    title: "Реклама HyperOS",
+    detail:
+      "Вимикає для вашого користувача аналітику Xiaomi, карусель екрана блокування, GetApps, Game Center і тихі служби Facebook. Камера, дзвінки, лаунчер, Joyose і PowerKeeper не чіпаються. Повертається кнопкою «Повернути стандарт».",
+    group: "Xiaomi 14T Pro",
+  },
+  {
     key: "trimCaches",
     title: "Очистити кеш",
     detail: "Забирає кеш програм. Фото, завантаження й облікові записи не чіпає. Перший запуск після цього може бути довшим.",
@@ -38,22 +66,23 @@ export const OPTION_CATALOG: {
   {
     key: "dexopt",
     title: "Прискорити запуск програм",
-    detail: "Ставить у чергу фонову оптимізацію ART. Кілька хвилин планшет може бути теплішим.",
+    detail: "Ставить у чергу фонову оптимізацію ART. Кілька хвилин телефон може бути теплішим.",
   },
   {
     key: "fstrim",
     title: "Обслуговування сховища",
-    detail: "Надсилає fstrim для внутрішньої пам’яті. На старих планшетах це повертає швидкість запису.",
+    detail: "Надсилає fstrim для внутрішньої пам’яті. Повертає швидкість запису, коли накопичилось сміття флеш-пам’яті.",
   },
   {
     key: "memoryLimit",
     title: "Ліміт фонових процесів",
-    detail: "Не більше 4 кешованих процесів. Може затримувати сповіщення, тому вимкнено, доки самі не увімкнете.",
+    detail:
+      "Не більше 4 кешованих процесів. На 14T Pro не вмикайте: 12 ГБ вистачає, а ліміт затримує сповіщення.",
   },
   {
     key: "screenTimeout",
     title: "Гасити екран через хвилину",
-    detail: "Тайм-аут екрана 60 секунд, якщо планшет часто лишається увімкненим.",
+    detail: "Тайм-аут екрана 60 секунд, якщо телефон часто лишається увімкненим.",
   },
 ];
 
@@ -72,6 +101,10 @@ function asNumber(value: string | null): number | null {
 
 function near(value: number | null, target: number, epsilon = 0.02): boolean {
   return value != null && Math.abs(value - target) <= epsilon;
+}
+
+function hz(value: string | null, target: number): boolean {
+  return near(asNumber(value), target, 0.05);
 }
 
 function failed(chunk: string, why: string): { ok: false; detail: string } {
@@ -104,7 +137,7 @@ echo animator=$(settings get global animator_duration_scale)
       if (near(windowScale, 0.5) && near(transition, 0.5) && near(animator, 0.5)) {
         return { ok: true, detail: "Вікно, переходи й аніматори стоять на 0,5×." };
       }
-      return failed(chunk, "Планшет не підтвердив шкалу 0,5×.");
+      return failed(chunk, "Телефон не підтвердив шкалу 0,5×.");
     },
   },
   scans: {
@@ -144,7 +177,75 @@ echo standby=$(settings get global app_standby_enabled)
           detail: "Режим очікування програм увімкнено. Ця прошивка не має окремого ключа адаптивної батареї.",
         };
       }
-      return failed(chunk, "Планшет не підтвердив адаптивну батарею.");
+      return failed(chunk, "Телефон не підтвердив адаптивну батарею.");
+    },
+  },
+  refresh: {
+    id: "refresh",
+    title: "Екран 144 Гц",
+    shell: refreshApplyScript(),
+    expect: (chunk) => {
+      if (hz(readValue(chunk, "peak"), 144) && hz(readValue(chunk, "min"), 60)) {
+        return { ok: true, detail: "Пік екрана 144 Гц, у спокої матриця може спадати до 60 Гц." };
+      }
+      return failed(chunk, "Телефон не підтвердив 144/60 Гц.");
+    },
+  },
+  appFreezer: {
+    id: "freezer",
+    title: "Заморожувати кеш програм",
+    shell: `
+settings put global cached_apps_freezer enabled
+echo freezer=$(settings get global cached_apps_freezer)
+`.trim(),
+    expect: (chunk) => {
+      if (readValue(chunk, "freezer") === "enabled") {
+        return { ok: true, detail: "Кеш фонових програм заморожується, доки програма не потрібна." };
+      }
+      return failed(chunk, "Прошивка не прийняла заморозку кешу.");
+    },
+  },
+  doze: {
+    id: "doze",
+    title: "Глибокий сон",
+    shell: `
+dumpsys deviceidle enable >/dev/null 2>&1
+echo doze=$(dumpsys deviceidle enabled 2>/dev/null | tr -d '[:space:]')
+`.trim(),
+    expect: (chunk) => {
+      const value = (readValue(chunk, "doze") ?? "").toLowerCase();
+      if (value === "1" || value === "true" || value === "enabled") {
+        return { ok: true, detail: "Doze увімкнено: телефон спить між перевірками мережі." };
+      }
+      return failed(chunk, "Прошивка не підтвердила глибокий сон.");
+    },
+  },
+  hyperAds: {
+    id: "hyper",
+    title: "Реклама HyperOS",
+    shell: hyperPackageScript("disable"),
+    expect: (chunk) => {
+      const failedCount = readValue(chunk, "hyper_failed");
+      const disabled = readValue(chunk, "hyper_disabled");
+      const skipped = readValue(chunk, "hyper_skipped");
+      if (failedCount == null || disabled == null) {
+        return failed(chunk, "Телефон не повернув результат вимкнення реклами.");
+      }
+      if (failedCount !== "0") {
+        const names = (readValue(chunk, "hyper_failed_names") ?? "").trim();
+        const suffix = names ? ` ${names}` : "";
+        return { ok: false, detail: `Не вдалося вимкнути:${suffix}`.slice(0, 280) };
+      }
+      if (disabled === "0") {
+        return {
+          ok: true,
+          detail: "Рекламних пакетів Xiaomi на цьому телефоні немає. Камеру, дзвінки й лаунчер не чіпали.",
+        };
+      }
+      return {
+        ok: true,
+        detail: `Вимкнено служб: ${disabled}. Немає на прошивці: ${skipped ?? "0"}. Камера, дзвінки, лаунчер і Joyose на місці.`,
+      };
     },
   },
   trimCaches: {
@@ -229,6 +330,10 @@ const OPTION_ORDER: OptionKey[] = [
   "animations",
   "scans",
   "adaptiveBattery",
+  "refresh",
+  "appFreezer",
+  "doze",
+  "hyperAds",
   "trimCaches",
   "dexopt",
   "fstrim",
@@ -240,7 +345,59 @@ export function buildOptimizePlan(options: OptimizeOptions): PlannedStep[] {
   return OPTION_ORDER.filter((key) => options[key]).map((key) => STEPS[key]);
 }
 
-export function buildRestorePlan(screenOffTimeoutMs?: string): PlannedStep[] {
+export type RefreshRestore = {
+  peak?: string;
+  min?: string;
+};
+
+function hyperRestoreStep(): PlannedStep {
+  return {
+    id: "hyper",
+    title: "Реклама HyperOS знову ввімкнена",
+    shell: hyperPackageScript("enable"),
+    expect: (chunk) => {
+      const failedCount = readValue(chunk, "hyper_failed");
+      const enabled = readValue(chunk, "hyper_enabled");
+      if (failedCount == null || enabled == null) {
+        return failed(chunk, "Телефон не повернув результат увімкнення служб Xiaomi.");
+      }
+      if (failedCount !== "0") {
+        const names = (readValue(chunk, "hyper_failed_names") ?? "").trim();
+        return { ok: false, detail: `Не вдалося увімкнути: ${names || "частину служб"}.`.slice(0, 280) };
+      }
+      if (enabled === "0") {
+        return { ok: true, detail: "Рекламних пакетів Xiaomi на телефоні немає, вмикати нічого." };
+      }
+      return { ok: true, detail: `Знову ввімкнено служб HyperOS: ${enabled}.` };
+    },
+  };
+}
+
+function refreshRestoreStep(refresh: RefreshRestore): PlannedStep {
+  return {
+    id: "refresh",
+    title: "Попередня частота екрана",
+    shell: refreshRestoreScript(refresh.peak, refresh.min),
+    expect: (chunk) => {
+      const peak = readValue(chunk, "peak");
+      const min = readValue(chunk, "min");
+      const absent = (value: string | null) => value == null || value === "null";
+      const peakOk = refresh.peak ? hz(peak, Number(refresh.peak)) : absent(peak);
+      const minOk = refresh.min ? hz(min, Number(refresh.min)) : absent(min);
+      if (peakOk && minOk) {
+        if (!refresh.peak && !refresh.min) {
+          return { ok: true, detail: "Частоту екрана знову вирішує HyperOS." };
+        }
+        const peakLabel = refresh.peak ?? "авто";
+        const minLabel = refresh.min ?? "авто";
+        return { ok: true, detail: `Частоту екрана повернуто: пік ${peakLabel} Гц, підлога ${minLabel} Гц.` };
+      }
+      return failed(chunk, "Частота екрана не повернулась.");
+    },
+  };
+}
+
+export function buildRestorePlan(screenOffTimeoutMs?: string, refresh?: RefreshRestore): PlannedStep[] {
   const previousTimeout = sanitizeTimeout(screenOffTimeoutMs);
   const steps: PlannedStep[] = [
     {
@@ -295,7 +452,10 @@ echo bg_limit=$(settings get global background_process_limit)
         return failed(chunk, "Ліміт процесів лишився зміненим.");
       },
     },
+    hyperRestoreStep(),
   ];
+
+  if (refresh) steps.push(refreshRestoreStep(refresh));
 
   if (previousTimeout) {
     steps.push({
