@@ -185,8 +185,8 @@ export function QrPairDialog({ open, onOpenChange, onPaired, onError }: Props) {
               Сполучення через QR
             </h2>
             <p id={descriptionId} className="text-sm leading-relaxed text-muted-foreground">
-              На планшеті: Бездротове налагодження → «Сполучити пристрій через QR-код» → наведіть камеру на цей код.
-              Комп’ютер і планшет мають бути в одному Wi-Fi.
+              На телефоні: Бездротове налагодження → «Сполучити пристрій через QR-код» → наведіть камеру на цей код.
+              Комп’ютер і телефон мають бути в одному Wi-Fi.
             </p>
           </div>
           <Button
@@ -231,7 +231,7 @@ export function QrPairDialog({ open, onOpenChange, onPaired, onError }: Props) {
           {busy ? (
             <span className="inline-flex items-center justify-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="size-4 animate-spin" />
-              Чекаю планшет
+              Чекаю телефон
             </span>
           ) : null}
         </div>

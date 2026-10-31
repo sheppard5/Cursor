@@ -17,6 +17,26 @@ test("never touches Settings or GMS", () => {
   assert.equal(plan[0]?.action, "uninstall-user");
 });
 
+test("leaves the 14T Pro camera, launcher and social apps alone", () => {
+  const plan = planDetox(
+    [
+      "com.facebook.katana",
+      "com.instagram.android",
+      "com.xiaomi.joyose",
+      "com.miui.powerkeeper",
+      "com.miui.home",
+      "com.android.camera",
+      "com.miui.daemon",
+      "com.miui.analytics",
+    ],
+    ["com.facebook.katana", "com.instagram.android"],
+  );
+  assert.deepEqual(
+    plan.map((item) => item.packageName),
+    ["com.miui.analytics"],
+  );
+});
+
 test("disables system adware instead of uninstalling", () => {
   const plan = planDetox(["com.miui.analytics", "com.cleanmaster.mguard"], ["com.cleanmaster.mguard"]);
   assert.deepEqual(

@@ -9,6 +9,10 @@ echo android=$(getprop ro.build.version.release)
 echo sdk=$(getprop ro.build.version.sdk)
 echo build=$(getprop ro.build.display.id)
 echo abi=$(getprop ro.product.cpu.abi)
+echo market=$(getprop ro.product.marketname)
+echo os_name=$(getprop ro.mi.os.version.name)
+echo os_build=$(getprop ro.mi.os.version.incremental)
+echo miui=$(getprop ro.miui.ui.version.name)
 echo @@MEM@@
 cat /proc/meminfo
 echo @@DF@@
@@ -25,6 +29,8 @@ echo adaptive=$(settings get global adaptive_battery_management_enabled)
 echo standby=$(settings get global app_standby_enabled)
 echo bg_limit=$(settings get global background_process_limit)
 echo screen_timeout=$(settings get system screen_off_timeout)
+echo peak=$(settings get system peak_refresh_rate)
+echo min_refresh=$(settings get system min_refresh_rate)
 echo @@PKG@@
 echo user=$(pm list packages -3 | wc -l)
 echo system=$(pm list packages -s | wc -l)
@@ -41,6 +47,7 @@ const PROCESS_LABELS: Record<string, string> = {
   "com.android.systemui": "Системний інтерфейс",
   "com.android.bluetooth": "Bluetooth",
   "com.android.launcher3": "Домашній екран",
+  "com.miui.home": "Домашній екран HyperOS",
   "com.google.android.apps.nexuslauncher": "Домашній екран",
   "com.sec.android.app.launcher": "Домашній екран",
   "com.google.android.gms": "Сервіси Google",
@@ -132,6 +139,13 @@ export function parseAudit(raw: string, serial: string): DeviceSnapshot {
   const settings = section(raw, "SET");
   const packages = section(raw, "PKG");
   const uptime = Number(section(raw, "UP").split(/\s+/)[0]);
+  const miui = field(prop, "miui");
+  let osName = field(prop, "os_name");
+  let osBuild = field(prop, "os_build");
+  if (!osName && miui) {
+    osName = /^v\d/i.test(miui) ? "HyperOS" : miui;
+    if (!osBuild && /^v\d/i.test(miui)) osBuild = miui;
+  }
   const level = integerOrNull(batteryField(battery, "level"));
   const temperature = integerOrNull(batteryField(battery, "temperature"));
   const powered = ["AC powered", "USB powered", "Wireless powered", "Dock powered"].some(
@@ -147,6 +161,11 @@ export function parseAudit(raw: string, serial: string): DeviceSnapshot {
     sdk: field(prop, "sdk"),
     build: field(prop, "build"),
     abi: field(prop, "abi"),
+    marketName: field(prop, "market"),
+    osName,
+    osBuild,
+    peakRefresh: field(settings, "peak"),
+    minRefresh: field(settings, "min_refresh"),
     memTotalKb: memKb(mem, "MemTotal"),
     memAvailableKb: memKb(mem, "MemAvailable"),
     swapTotalKb: memKb(mem, "SwapTotal"),

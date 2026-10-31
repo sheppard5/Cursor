@@ -1,4 +1,5 @@
 import type { BatteryStatus, DeviceSnapshot } from "./types";
+import { isXiaomi14tPro, refreshPhrase, systemLabel } from "./xiaomi";
 
 export function formatKb(kb: number): string {
   if (!Number.isFinite(kb) || kb <= 0) return "—";
@@ -41,10 +42,16 @@ function niceToken(value: string): string {
   return trimmed;
 }
 
-export function deviceTitle(manufacturer: string, model: string): string {
+export function deviceTitle(manufacturer: string, model: string, marketName = ""): string {
+  const market = marketName.trim();
+  if (market) {
+    const brand = niceToken(manufacturer);
+    if (!brand || market.toLowerCase().startsWith(brand.toLowerCase())) return market;
+    return `${brand} ${market}`;
+  }
   const brand = niceToken(manufacturer);
   const name = model.trim();
-  if (!brand && !name) return "Android-планшет";
+  if (!brand && !name) return "Android-пристрій";
   if (!brand) return name;
   if (!name) return brand;
   if (name.toLowerCase().startsWith(brand.toLowerCase())) return name;
@@ -72,7 +79,17 @@ export function adviceFor(device: DeviceSnapshot): string[] {
   }
   if (device.memTotalKb > 0 && device.memAvailableKb / device.memTotalKb < 0.12) {
     notes.push(
-      "Вільної оперативної пам’яті майже немає. Закрийте важкі програми. Ліміт фонових процесів умикайте, лише якщо планшет постійно смикається.",
+      isXiaomi14tPro(device)
+        ? "Вільної оперативної пам’яті майже немає. Закрийте важкі програми. Ліміт фонових процесів на 14T Pro не вмикайте — він затримує сповіщення."
+        : "Вільної оперативної пам’яті майже немає. Закрийте важкі програми. Ліміт фонових процесів умикайте, лише якщо пристрій постійно смикається.",
+    );
+  }
+  if (isXiaomi14tPro(device)) {
+    const rate = refreshPhrase(device.peakRefresh, device.minRefresh);
+    notes.push(
+      rate
+        ? `Xiaomi 14T Pro · ${systemLabel(device)} · екран ${rate}. Профіль ставить пік 144 Гц і підлогу 60 Гц.`
+        : "Xiaomi 14T Pro. Профіль ставить пік 144 Гц і підлогу 60 Гц, вмикає сон і вимикає рекламу HyperOS.",
     );
   }
   if (device.batteryLevel != null && device.batteryLevel < 20 && !device.plugged) {
@@ -90,13 +107,14 @@ export function adviceFor(device: DeviceSnapshot): string[] {
 }
 
 export function formatReport(device: DeviceSnapshot): string {
+  const rate = refreshPhrase(device.peakRefresh, device.minRefresh);
   return [
-    deviceTitle(device.manufacturer, device.model),
-    `Android ${device.android || "—"} · SDK ${device.sdk || "—"} · ${device.abi || "—"}`,
+    deviceTitle(device.manufacturer, device.model, device.marketName),
+    `${systemLabel(device)} · SDK ${device.sdk || "—"} · ${device.abi || "—"}`,
     `Батарея: ${batteryPhrase(device.batteryStatus, device.plugged, device.batteryLevel)} · ${formatTemp(device.batteryTempC)}`,
     `Пам’ять: ${formatKb(device.memAvailableKb)} вільно з ${formatKb(device.memTotalKb)}`,
     `Сховище: ${formatKb(device.storageAvailKb)} вільно з ${formatKb(device.storageTotalKb)}`,
-    `Анімації: ${device.animations.window || "—"}×`,
+    `Анімації: ${device.animations.window || "—"}×${rate ? ` · екран ${rate}` : ""}`,
     `Працює: ${formatUptime(device.uptimeSec)}`,
   ].join("\n");
 }

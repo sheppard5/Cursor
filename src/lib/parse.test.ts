@@ -86,13 +86,39 @@ test("parses a tablet audit", () => {
 test("names the tablet without repeating the brand", () => {
   assert.equal(deviceTitle("samsung", "SM-X200"), "Samsung SM-X200");
   assert.equal(deviceTitle("Samsung", "Samsung Galaxy Tab A8"), "Samsung Galaxy Tab A8");
-  assert.equal(deviceTitle("", ""), "Android-планшет");
+  assert.equal(deviceTitle("", ""), "Android-пристрій");
+  assert.equal(deviceTitle("Xiaomi", "2407FPN8EG", "Xiaomi 14T Pro"), "Xiaomi 14T Pro");
 });
 
 test("describes battery and storage in Ukrainian units", () => {
   assert.equal(batteryPhrase("charging", true, 76), "76% · заряджається");
   assert.equal(batteryPhrase("discharging", false, 40), "40% · від акумулятора");
   assert.match(formatKb(2855112), /ГБ/);
+});
+
+test("reads HyperOS and the 14T Pro refresh rate", () => {
+  const raw = SAMPLE.replace(
+    "abi=arm64-v8a",
+    `abi=arm64-v8a
+market=Xiaomi 14T Pro
+os_name=HyperOS
+os_build=OS2.0.3.0.VNNEUXM
+miui=V816`,
+  ).replace(
+    "screen_timeout=60000",
+    `screen_timeout=60000
+peak=144.0
+min_refresh=60`,
+  );
+  const device = parseAudit(raw.replace("manufacturer=samsung", "manufacturer=Xiaomi").replace("model=SM-X200", "model=2407FPN8EG").replace("device=gta9wifi", "device=rothko"), "192.168.1.20:5555");
+  assert.equal(device.marketName, "Xiaomi 14T Pro");
+  assert.equal(device.osName, "HyperOS");
+  assert.equal(device.osBuild, "OS2.0.3.0.VNNEUXM");
+  assert.equal(device.peakRefresh, "144.0");
+  assert.equal(device.minRefresh, "60");
+  assert.equal(deviceTitle(device.manufacturer, device.model, device.marketName), "Xiaomi 14T Pro");
+  const notes = adviceFor(device);
+  assert.match(notes.join(" "), /14T Pro/);
 });
 
 test("warns when the tablet is low on storage or power", () => {

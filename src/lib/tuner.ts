@@ -4,7 +4,7 @@ import { parsePackageList, planDetox, renderDetoxShell, type DetoxTarget } from 
 import { assertPairCode, parseEndpoint, sanitizeTimeout } from "./endpoint";
 import { TunerError } from "./errors";
 import { AUDIT_SCRIPT, parseAudit } from "./parse";
-import { buildOptimizePlan, buildRestorePlan, parseStepOutput, renderScript } from "./plan";
+import { buildOptimizePlan, buildRestorePlan, parseStepOutput, renderScript, type RefreshRestore } from "./plan";
 import { findConnectService, findPairingService, parseMdnsServices } from "./qr-pair";
 import { cancelQrSession, completeQrSession, createQrSession, getQrSession } from "./qr-session";
 import type { DeviceSnapshot, OptimizeOptions, StepResult } from "./types";
@@ -13,16 +13,16 @@ async function shell(serial: string, script: string, timeoutMs: number): Promise
   const result = await runAdb(["-s", serial, "shell", script], timeoutMs);
   const blob = `${result.stdout}\n${result.stderr}`;
   if (result.timedOut) {
-    throw new TunerError("Планшет не відповів вчасно. Перевірте, що екран розблоковано і Wi-Fi не заснув.", 504);
+    throw new TunerError("Телефон не відповів вчасно. Перевірте, що екран розблоковано і Wi-Fi не заснув.", 504);
   }
   if (/unauthorized/i.test(blob)) {
-    throw new TunerError("Планшет відхилив сесію ADB. Підтвердьте комп’ютер на екрані.", 409);
+    throw new TunerError("Телефон відхилив сесію ADB. Підтвердьте комп’ютер на екрані.", 409);
   }
   if (/device offline/i.test(blob)) {
-    throw new TunerError("Планшет перейшов у стан offline. Увімкніть бездротове налагодження ще раз.", 409);
+    throw new TunerError("Телефон перейшов у стан offline. Увімкніть бездротове налагодження ще раз.", 409);
   }
   if (/device '.+' not found/i.test(blob) || /no devices/i.test(blob)) {
-    throw new TunerError("ADB втратив планшет посеред команди. Підключіться знову.", 409);
+    throw new TunerError("ADB втратив телефон посеред команди. Підключіться знову.", 409);
   }
   return blob;
 }
@@ -56,12 +56,12 @@ export async function pairDevice(host: string, pairPort: number, code: string) {
   }
   if (blob.includes("@@TIMEOUT@@") || /timed out|timeout|no route|unreachable/i.test(blob)) {
     throw new TunerError(
-      "Порт сполучення не відповідає. Він дійсний, лише поки на планшеті відкрите вікно з кодом.",
+      "Порт сполучення не відповідає. Він дійсний, лише поки на телефоні відкрите вікно з кодом.",
       409,
     );
   }
   if (/failed|incorrect|wrong|error/i.test(blob)) {
-    throw new TunerError("Сполучення не вдалося. Відкрийте новий код на планшеті й спробуйте ще раз.", 400);
+    throw new TunerError("Сполучення не вдалося. Відкрийте новий код на телефоні й спробуйте ще раз.", 400);
   }
   throw new TunerError(blob.trim().slice(0, 240) || "Сполучення не вдалося.", 400);
 }
@@ -105,7 +105,7 @@ export async function startQrPairing() {
     serviceName: session.serviceName,
     expiresAt: session.expiresAt,
     qrDataUrl,
-    message: "На планшеті відкрийте «Сполучити пристрій через QR-код» і наведіть камеру на цей код.",
+    message: "На телефоні відкрийте «Сполучити пристрій через QR-код» і наведіть камеру на цей код.",
   };
 }
 
@@ -118,7 +118,7 @@ export async function pollQrPairing(sessionId: string) {
       ok: true as const,
       status: "waiting" as const,
       expiresAt: session.expiresAt,
-      message: "Чекаю, поки планшет зчитає QR і з’явиться в мережі…",
+      message: "Чекаю, поки телефон зчитає QR і з’явиться в мережі…",
     };
   }
 
@@ -136,7 +136,7 @@ export async function pollQrPairing(sessionId: string) {
       message:
         connected.status === "connected"
           ? `Сполучено через QR і підключено до ${connected.serial}. Можна зчитати стан.`
-          : `Сполучено через QR. Підтвердьте налагодження на екрані планшета, потім зчитайте стан (${connected.serial}).`,
+          : `Сполучено через QR. Підтвердьте налагодження на екрані телефону, потім зчитайте стан (${connected.serial}).`,
     };
   }
 
@@ -193,9 +193,14 @@ export async function applyOptimize(host: string, port: number, options: Optimiz
   return applyPlan(host, port, buildOptimizePlan(options));
 }
 
-export async function restoreDevice(host: string, port: number, screenOffTimeoutMs: unknown) {
+export async function restoreDevice(
+  host: string,
+  port: number,
+  screenOffTimeoutMs: unknown,
+  refresh?: RefreshRestore,
+) {
   const timeout = sanitizeTimeout(screenOffTimeoutMs);
-  return applyPlan(host, port, buildRestorePlan(timeout));
+  return applyPlan(host, port, buildRestorePlan(timeout, refresh));
 }
 
 export async function health() {

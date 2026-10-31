@@ -1,5 +1,5 @@
-# Safe adware/spyware pass for a paired Android tablet (Windows PowerShell).
-# Usage (from platform-tools folder, tablet already in `adb devices`):
+# Safe adware/spyware pass for a paired Android phone (Windows PowerShell).
+# Usage (from platform-tools folder, phone already in `adb devices`):
 #   powershell -ExecutionPolicy Bypass -File C:\path\to\Cursor\scripts\detox-tablet.ps1 -Serial 192.168.1.83:44853
 # Dry run:
 #   ... -DryRun
@@ -24,22 +24,23 @@ function Invoke-Adb([string[]]$Args) {
 Write-Host "Пристрій: $Serial"
 $devices = Invoke-Adb @("devices")
 if ($devices -notmatch [regex]::Escape($Serial)) {
-  Write-Host "Планшет не в adb devices. Спочатку pair/connect."
+  Write-Host "Телефон не в adb devices. Спочатку pair/connect."
   exit 1
 }
 
 $never = @(
-  "com.android.systemui", "com.android.settings", "com.android.launcher3",
+  "com.android.systemui", "com.android.settings", "com.android.launcher3", "com.miui.home",
   "com.google.android.gms", "com.google.android.gsf", "com.android.vending",
-  "com.google.android.packageinstaller", "com.android.phone", "com.android.bluetooth"
+  "com.google.android.packageinstaller", "com.android.phone", "com.android.bluetooth",
+  "com.android.camera", "com.xiaomi.joyose", "com.miui.powerkeeper", "com.miui.securitycenter",
+  "com.miui.daemon"
 )
 
 $kill = @(
   "com.facebook.appmanager", "com.facebook.system", "com.facebook.services",
-  "com.facebook.katana", "com.instagram.android",
   "com.cleanmaster.mguard", "com.cleanmaster.security", "com.cmcm.security",
   "com.qihoo.security", "com.qihoo360.mobilesafe",
-  "com.miui.analytics", "com.miui.systemAdSolution", "com.miui.daemon",
+  "com.miui.analytics", "com.miui.systemAdSolution",
   "com.xiaomi.discover", "com.xiaomi.mipicks", "com.xiaomi.glgm",
   "com.heytap.market", "com.heytap.pictorial", "com.oppo.market",
   "com.vivo.appstore", "com.bbk.appstore",
@@ -82,4 +83,4 @@ foreach ($pkg in $present) {
 }
 
 Write-Host "Готово. Журнал: $log"
-Write-Host "Перезавантажте планшет: $Adb -s $Serial reboot"
+Write-Host "Перезавантажте телефон: $Adb -s $Serial reboot"
