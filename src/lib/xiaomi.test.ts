@@ -22,6 +22,7 @@ test("ad list never includes the services 14T Pro needs", () => {
   }
   const script = hyperPackageScript("disable");
   assert.match(script, /pm disable-user --user 0 "\$pkg"/);
+  assert.match(script, /pm uninstall --user 0 "\$pkg"/);
   assert.match(script, /com\.miui\.analytics/);
   assert.match(script, /com\.miui\.msa\.global/);
   assert.doesNotMatch(script, /com\.xiaomi\.joyose/);

@@ -83,16 +83,23 @@ skipped=0
 failed=0
 failed_names=""
 for pkg in ${packages}; do
-  if ! pm path "$pkg" >/dev/null 2>&1; then
+  if ! pm list packages -u "$pkg" 2>/dev/null | grep -qx "package:$pkg"; then
     skipped=$((skipped + 1))
     continue
   fi
   pm disable-user --user 0 "$pkg" >/dev/null 2>&1
   if pm list packages -d "$pkg" 2>/dev/null | grep -qx "package:$pkg"; then
     disabled=$((disabled + 1))
-  else
+    continue
+  fi
+  # HyperOS 2 rejects setEnabledSetting for system packages. Hide the app for user 0;
+  # the system image stays, and pm install-existing brings it back.
+  pm uninstall --user 0 "$pkg" >/dev/null 2>&1
+  if pm list packages --user 0 "$pkg" 2>/dev/null | grep -qx "package:$pkg"; then
     failed=$((failed + 1))
     failed_names="$failed_names $pkg"
+  else
+    disabled=$((disabled + 1))
   fi
 done
 echo hyper_disabled=$disabled
@@ -108,16 +115,18 @@ skipped=0
 failed=0
 failed_names=""
 for pkg in ${packages}; do
-  if ! pm path "$pkg" >/dev/null 2>&1; then
+  if ! pm list packages -u "$pkg" 2>/dev/null | grep -qx "package:$pkg"; then
     skipped=$((skipped + 1))
     continue
   fi
+  pm install-existing --user 0 "$pkg" >/dev/null 2>&1
   pm enable --user 0 "$pkg" >/dev/null 2>&1
-  if pm list packages -d "$pkg" 2>/dev/null | grep -qx "package:$pkg"; then
+  if pm list packages --user 0 "$pkg" 2>/dev/null | grep -qx "package:$pkg" \
+    && ! pm list packages -d "$pkg" 2>/dev/null | grep -qx "package:$pkg"; then
+    enabled=$((enabled + 1))
+  else
     failed=$((failed + 1))
     failed_names="$failed_names $pkg"
-  else
-    enabled=$((enabled + 1))
   fi
 done
 echo hyper_enabled=$enabled
